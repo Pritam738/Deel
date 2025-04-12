@@ -1,6 +1,7 @@
 const express = require('express');
 const { Contract } = require('../model'); // Adjust the path as necessary
 const { getProfile } = require('../middleware/getProfile');
+const Sequelize = require('sequelize');
 
 const router = express.Router();
 
@@ -23,6 +24,36 @@ router.get('/:id', getProfile, async (req, res) => {
     }
 
     res.json(contract);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/**
+ * @returns list of contracts for the logged-in user (client or contractor)
+ * Excludes terminated contracts
+ */
+router.get('/', getProfile, async (req, res) => {
+  const userId = req.profile.id;
+
+  try {
+    const contracts = await Contract.findAll({
+      where: {
+        [Sequelize.Op.or]: [
+          { ClientId: userId },
+          { ContractorId: userId }
+        ],
+        status: { [Sequelize.Op.ne]: 'terminated' }
+      }
+    });
+
+    if (!contracts.length) {
+      return res.status(404).json({ error: 'No contracts found' });
+    }
+
+    res.json(contracts);
 
   } catch (error) {
     console.error(error);
