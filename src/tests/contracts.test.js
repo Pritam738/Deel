@@ -28,7 +28,6 @@ beforeAll(async () => {
     type: 'contractor'
   });
 
-  // Create contracts for client and contractor
   await Contract.create({
     terms: 'Sample contract terms',
     status: 'in_progress',

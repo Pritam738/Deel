@@ -37,7 +37,6 @@ router.get('/:id', getProfile, async (req, res) => {
  */
 router.get('/', getProfile, async (req, res) => {
   const userId = req.profile.id;
-
   try {
     const contracts = await Contract.findAll({
       where: {
