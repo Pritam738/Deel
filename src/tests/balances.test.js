@@ -49,7 +49,9 @@ beforeEach(async () => {
 afterAll(async () => {
   await sequelize.close();
 });
-
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 describe('POST /balances/deposit/:userId', () => {
   it('should deposit funds if amount is within allowed limit (25%)', async () => {
     const res = await request(app)

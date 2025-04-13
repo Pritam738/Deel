@@ -65,7 +65,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await sequelize.close();
 });
-
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 describe('GET /admin/best-profession', () => {
   it('should return the top earning profession within the given date range', async () => {
     const response = await request(app)

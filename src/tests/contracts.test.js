@@ -53,7 +53,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await sequelize.close();
 });
-
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 describe('GET /contracts/:id', () => {
   it('should return 404 if the contract is not found', async () => {
     const response = await request(app)

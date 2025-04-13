@@ -50,7 +50,9 @@ beforeEach(async () => {
 afterAll(async () => {
   await sequelize.close();
 });
-
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 describe('GET /jobs/unpaid', () => {
   it('should return all unpaid jobs for the client or contractor in active contracts', async () => {
     const response = await request(app)
@@ -143,17 +145,10 @@ describe('POST /jobs/:job_id/pay', () => {
   });
 
   it('should return 400 if client does not have enough balance', async () => {
-    const newClient = await Profile.create({
-      firstName: 'New Client',
-      lastName: 'Test',
-      profession: 'Engineer',
-      balance: 50,  // Not enough balance
-      type: 'client'
-    });
-
+    await client.update({ balance: 1 });
     const response = await request(app)
       .post(`/jobs/${unpaidJob.id}/pay`)
-      .set('profile_id', newClient.id)  // Client with insufficient balance
+      .set('profile_id', client.id)  // Valid client who owns the job but lacks funds
       .send();
 
     expect(response.status).toBe(400);
@@ -171,7 +166,7 @@ describe('POST /jobs/:job_id/pay', () => {
   });
 
   it('should return 500 if there is a server error', async () => {
-    jest.spyOn(Job, 'findByPk').mockRejectedValueOnce(new Error('Database error'));
+    jest.spyOn(Job, 'findOne').mockRejectedValueOnce(new Error('Database error'));
 
     const response = await request(app)
       .post(`/jobs/${unpaidJob.id}/pay`)
