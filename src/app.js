@@ -4,8 +4,9 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { sequelize } = require('./model');
-const contractRoutes = require('./routes/contracts'); // Import routes
+const contractRoutes = require('./routes/contracts');
 const adminRouter = require('./routes/admin');
+const balanceRoutes = require('./routes/balances');
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -28,5 +29,6 @@ app.set('models', sequelize.models);
 // Use routes
 app.use('/contracts', contractRoutes);
 app.use('/admin', adminRouter);
+app.use('/balances', balanceRoutes);
 
 module.exports = app;
