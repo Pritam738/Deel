@@ -1,62 +1,49 @@
 const request = require('supertest');
-const app = require('../app'); // Adjust path to your Express app
+const app = require('../app');
 const { sequelize, Profile, Contract, Job } = require('../model');
 const { getProfile } = require('../middleware/getProfile');
 
 jest.mock('../middleware/getProfile', () => ({
   getProfile: jest.fn((req, res, next) => {
     const profileId = req.get('profile_id');
-    req.profile = { id: Number(profileId) };
+    req.profile = { id: profileId };
     next();
   })
 }));
 
-beforeAll(async () => {
+let client, contractor, contract, unpaidJob;
+
+beforeEach(async () => {
   await sequelize.sync({ force: true });
-  // Create test data
-  const client = await Profile.create({
+
+  client = await Profile.create({
     firstName: 'Client',
     lastName: 'Test',
-    profession: 'Developer',
-    balance: 1000,
-    type: 'client',
+    profession: 'Engineer',
+    balance: 500,
+    type: 'client'
   });
-  const contractor = await Profile.create({
+
+  contractor = await Profile.create({
     firstName: 'Contractor',
     lastName: 'Test',
     profession: 'Designer',
-    balance: 500,
-    type: 'contractor',
+    balance: 0,
+    type: 'contractor'
   });
 
-  const contract = await Contract.create({
-    terms: 'Sample contract terms',
-    status: 'in_progress',
+  contract = await Contract.create({
     ClientId: client.id,
     ContractorId: contractor.id,
-  });
-
-  await Job.create({
-    description: 'Unpaid job',
-    price: 200,
-    paid: null,
-    ContractId: contract.id,
-  });
-
-  await Job.create({
-    description: 'Paid job',
-    price: 300,
-    paid: true,
-    paymentDate: new Date(),
-    ContractId: contract.id,
-  });
-
-  // Another contract with no jobs
-  await Contract.create({
-    terms: 'Empty contract',
     status: 'in_progress',
-    ClientId: client.id,
-    ContractorId: contractor.id,
+    terms: 'Test contract'
+  });
+
+  unpaidJob = await Job.create({
+    ContractId: contract.id,
+    description: 'Logo design',
+    price: 400,
+    paid: false
   });
 });
 
@@ -65,43 +52,49 @@ afterAll(async () => {
 });
 
 describe('GET /jobs/unpaid', () => {
-  it('should return unpaid jobs for the client', async () => {
-    const client = await Profile.findOne({ where: { type: 'client' } });
-
+  it('should return all unpaid jobs for the client or contractor in active contracts', async () => {
     const response = await request(app)
       .get('/jobs/unpaid')
-      .set('profile_id', client.id);
+      .set('profile_id', client.id);  // Client's profile ID
 
     expect(response.status).toBe(200);
-    expect(response.body).toHaveLength(1);
-    expect(response.body[0]).toHaveProperty('description', 'Unpaid job');
-    expect(response.body[0]).toHaveProperty('price', 200);
-    expect(response.body[0]).toHaveProperty('paid', null);
+    expect(response.body).toHaveLength(1);  // One unpaid job for the client
+    expect(response.body[0]).toHaveProperty('id', unpaidJob.id);
   });
 
-  it('should return 404 if no unpaid jobs are found', async () => {
-    const client = await Profile.findOne({ where: { type: 'client' } });
-    // Mark all jobs as paid
-    await Job.update({ paid: true, paymentDate: new Date() }, { where: { paid: null } });
+  it('should return unpaid jobs for contractor as well', async () => {
+    const response = await request(app)
+      .get('/jobs/unpaid')
+      .set('profile_id', contractor.id);  // Contractor's profile ID
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);  // One unpaid job for the contractor
+    expect(response.body[0]).toHaveProperty('id', unpaidJob.id);
+  });
+
+  it('should return 404 if no unpaid jobs found', async () => {
+    const newClient = await Profile.create({
+      firstName: 'New',
+      lastName: 'Client',
+      profession: 'Engineer',
+      balance: 100,
+      type: 'client'
+    });
 
     const response = await request(app)
       .get('/jobs/unpaid')
-      .set('profile_id', client.id);
+      .set('profile_id', newClient.id);  // No unpaid jobs for this new client
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('No unpaid jobs found');
   });
 
-  it('should return 500 if there is an internal server error', async () => {
-    jest.spyOn(Job, 'findAll').mockImplementationOnce(() => {
-      throw new Error('Database error');
-    });
-
-    const client = await Profile.findOne({ where: { type: 'client' } });
+  it('should return 500 if an error occurs', async () => {
+    jest.spyOn(Job, 'findAll').mockRejectedValueOnce(new Error('Database error'));
 
     const response = await request(app)
       .get('/jobs/unpaid')
-      .set('profile_id', client.id);
+      .set('profile_id', client.id);  // Assume client has unpaid jobs
 
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('Internal Server Error');
@@ -109,107 +102,81 @@ describe('GET /jobs/unpaid', () => {
 });
 
 describe('POST /jobs/:job_id/pay', () => {
-  beforeEach(async () => {
-    // Reset jobs to ensure unpaid job exists for each test
-    await Job.destroy({ where: {} });
-    const contract = await Contract.findOne({ where: { terms: 'Sample contract terms' } });
-    await Job.create({
-      description: 'Unpaid job',
-      price: 200,
-      paid: null,
-      ContractId: contract.id,
-    });
-    await Job.create({
-      description: 'Paid job',
-      price: 300,
-      paid: true,
-      paymentDate: new Date(),
-      ContractId: contract.id,
-    });
-  });
-
   it('should allow client to pay for an unpaid job', async () => {
-    const client = await Profile.findOne({ where: { type: 'client' } });
-    const job = await Job.findOne({ where: { paid: null } });
-
     const response = await request(app)
-      .post(`/jobs/${job.id}/pay`)
-      .set('profile_id', client.id);
+      .post(`/jobs/${unpaidJob.id}/pay`)
+      .set('profile_id', client.id)  // Client paying for the job
+      .send();
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ message: 'Payment successful' });
+    expect(response.body.message).toBe('Payment successful');
 
-    // Verify job is paid
-    const updatedJob = await Job.findByPk(job.id);
-    expect(updatedJob.paid).toBe(true);
-    expect(updatedJob.paymentDate).not.toBeNull();
-
-    // Verify balances
     const updatedClient = await Profile.findByPk(client.id);
-    const contractor = await Profile.findOne({ where: { type: 'contractor' } });
-    expect(updatedClient.balance).toBe(800); // 1000 - 200
-    expect(contractor.balance).toBe(700); // 500 + 200
+    const updatedContractor = await Profile.findByPk(contractor.id);
+    expect(updatedClient.balance).toBe(100);  // 500 - 400 = 100
+    expect(updatedContractor.balance).toBe(400);  // 0 + 400 = 400
+
+    const updatedJob = await Job.findByPk(unpaidJob.id);
+    expect(updatedJob.paid).toBe(true);
   });
 
-  it('should return 404 if the job is not found', async () => {
-    const client = await Profile.findOne({ where: { type: 'client' } });
-
+  it('should return 403 if user is not the client', async () => {
     const response = await request(app)
-      .post('/jobs/999/pay')
-      .set('profile_id', client.id);
-
-    expect(response.status).toBe(404);
-    expect(response.body.error).toBe('Job not found');
-  });
-
-  it('should return 403 if the user is not the client', async () => {
-    const contractor = await Profile.findOne({ where: { type: 'contractor' } });
-    const job = await Job.findOne({ where: { paid: null } });
-
-    const response = await request(app)
-      .post(`/jobs/${job.id}/pay`)
-      .set('profile_id', contractor.id);
+      .post(`/jobs/${unpaidJob.id}/pay`)
+      .set('profile_id', contractor.id)  // Contractor trying to pay (forbidden)
+      .send();
 
     expect(response.status).toBe(403);
     expect(response.body.error).toBe('Only the client can pay for the job');
   });
 
-  it('should return 400 if the job is already paid', async () => {
-    const client = await Profile.findOne({ where: { type: 'client' } });
-    const job = await Job.findOne({ where: { paid: true } });
+  it('should return 400 if job has already been paid for', async () => {
+    await unpaidJob.update({ paid: true });
 
     const response = await request(app)
-      .post(`/jobs/${job.id}/pay`)
-      .set('profile_id', client.id);
+      .post(`/jobs/${unpaidJob.id}/pay`)
+      .set('profile_id', client.id)  // Client trying to pay for an already paid job
+      .send();
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('Job already paid for');
   });
 
-  it('should return 400 if client has insufficient balance', async () => {
-    const client = await Profile.findOne({ where: { type: 'client' } });
-    await client.update({ balance: 100 }); // Set balance below job price
-    const job = await Job.findOne({ where: { paid: null } });
+  it('should return 400 if client does not have enough balance', async () => {
+    const newClient = await Profile.create({
+      firstName: 'New Client',
+      lastName: 'Test',
+      profession: 'Engineer',
+      balance: 50,  // Not enough balance
+      type: 'client'
+    });
 
     const response = await request(app)
-      .post(`/jobs/${job.id}/pay`)
-      .set('profile_id', client.id);
+      .post(`/jobs/${unpaidJob.id}/pay`)
+      .set('profile_id', newClient.id)  // Client with insufficient balance
+      .send();
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('Insufficient balance to pay for this job');
   });
 
-  it('should return 500 if there is an internal server error', async () => {
-    jest.spyOn(Job, 'findByPk').mockImplementationOnce(() => {
-      throw new Error('Database error');
-    });
+  it('should return 404 if the job is not found', async () => {
+    const response = await request(app)
+      .post(`/jobs/99999/pay`)  // Non-existent job ID
+      .set('profile_id', client.id)
+      .send();
 
-    const client = await Profile.findOne({ where: { type: 'client' } });
-    const job = await Job.findOne({ where: { paid: null } });
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe('Job not found');
+  });
+
+  it('should return 500 if there is a server error', async () => {
+    jest.spyOn(Job, 'findByPk').mockRejectedValueOnce(new Error('Database error'));
 
     const response = await request(app)
-      .post(`/jobs/${job.id}/pay`)
-      .set('profile_id', client.id);
+      .post(`/jobs/${unpaidJob.id}/pay`)
+      .set('profile_id', client.id)
+      .send();
 
     expect(response.status).toBe(500);
     expect(response.body.error).toBe('Internal Server Error');

@@ -46,45 +46,60 @@ router.get('/unpaid', getProfile, async (req, res) => {
  */
 router.post('/:job_id/pay', getProfile, async (req, res) => {
   const { job_id } = req.params;
-  const clientId = Number(req.get('profile_id'))
+  const clientId = Number(req.get('profile_id'));
 
+  const transaction = await Job.sequelize.transaction();
   try {
-    const job = await Job.findByPk(job_id, {
+    const job = await Job.findOne({
+      where: { id: job_id },
       include: {
         model: Contract,
-        required: true,
+        required: true
       },
+      transaction
     });
 
     if (!job) {
+      await transaction.rollback();
       return res.status(404).json({ error: 'Job not found' });
     }
 
     if (job.Contract.ClientId !== clientId) {
+      await transaction.rollback();
       return res.status(403).json({ error: 'Only the client can pay for the job' });
     }
 
-    if (job.paid === 1) {
+    if (job.paid === true) {
+      await transaction.rollback();
       return res.status(400).json({ error: 'Job already paid for' });
     }
 
-    const client = await Profile.findByPk(clientId);
-    if (client.balance < job.amountDue) {
+    const client = await Profile.findByPk(clientId, { transaction });
+    if (client.balance < job.price) {
+      await transaction.rollback();
       return res.status(400).json({ error: 'Insufficient balance to pay for this job' });
     }
 
-    const contractor = await Profile.findByPk(job.Contract.ContractorId);
+    const contractor = await Profile.findByPk(job.Contract.ContractorId, { transaction });
 
-    await client.update({ balance: client.balance - job.amountDue });
-    await contractor.update({ balance: contractor.balance + job.amountDue });
+    client.balance -= job.price;
+    contractor.balance += job.price;
 
-    await job.update({ paid: 1, paymentDate: new Date() });
+    await client.save({ transaction });
+    await contractor.save({ transaction });
 
+    job.paid = true;
+    job.paymentDate = new Date();
+    await job.save({ transaction });
+
+    await transaction.commit();
     res.json({ message: 'Payment successful' });
   } catch (error) {
     console.error(error);
+    await transaction.rollback();
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 module.exports = router;
