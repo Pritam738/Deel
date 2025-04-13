@@ -12,22 +12,25 @@ const router = express.Router();
  */
 router.get('/unpaid', getProfile, async (req, res) => {
   const id = Number(req.get('profile_id'))
-  console.log('User ID:', id); // Log the user ID for debugging 
   try {
     const unpaidJobs = await Job.findAll({
       where: {
-        paid: null,
+        paid: {
+          [Sequelize.Op.or]: [null, false],
+        },
         '$Contract.status$': 'in_progress',
       },
       include: {
         model: Contract,
         where: {
-            ClientId: id
+          [Sequelize.Op.or]: [
+            { ClientId: id },
+            { ContractorId: id }
+          ]
         },
         required: true,
       },
     });
-
     if (!unpaidJobs.length) {
       return res.status(404).json({ error: 'No unpaid jobs found' });
     }
