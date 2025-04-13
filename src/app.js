@@ -4,11 +4,12 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { sequelize } = require('./model');
-const contractRoutes = require('./routes/contracts'); // Import routes
+const contractRoutes = require('./routes/contracts');
+const jobsRoutes = require('./routes/jobs');
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000,
   message: 'Too many requests, please try again later.'
 });
 
@@ -26,5 +27,6 @@ app.set('models', sequelize.models);
 
 // Use routes
 app.use('/contracts', contractRoutes);
+app.use('/jobs', jobsRoutes);
 
 module.exports = app;
