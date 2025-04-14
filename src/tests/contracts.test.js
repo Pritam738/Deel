@@ -1,7 +1,6 @@
 const request = require('supertest');
 const app = require('../app');
 const { sequelize, Profile, Contract } = require('../model');
-const { getProfile } = require('../middleware/getProfile');
 
 jest.mock('../middleware/getProfile', () => ({
   getProfile: jest.fn((req, res, next) => {

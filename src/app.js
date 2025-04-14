@@ -8,6 +8,7 @@ const contractRoutes = require('./routes/contracts');
 const jobsRoutes = require('./routes/jobs');
 const adminRouter = require('./routes/admin');
 const balanceRoutes = require('./routes/balances');
+const setupSwagger = require('./swagger');
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -23,6 +24,7 @@ app.use(morgan('combined'));
 app.use(limiter);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+setupSwagger(app);
 
 app.set('sequelize', sequelize);
 app.set('models', sequelize.models);

@@ -4,14 +4,60 @@ const { getProfile } = require('../middleware/getProfile');
 const Sequelize = require('sequelize');
 
 const router = express.Router();
+/**
+ * @swagger
+ * tags:
+ *   name: Jobs
+ *   description: Job-related endpoints
+ */
 
 /**
- * @route GET /jobs/unpaid
- * @desc Get all unpaid jobs for a user (either client or contractor) in active contracts
- * @access Public (You can change this based on your needs)
+ * @swagger
+ * /jobs/unpaid:
+ *   get:
+ *     summary: Get all unpaid jobs for the logged-in user with active contracts
+ *     tags: [Jobs]
+ *     parameters:
+ *       - in: header
+ *         name: profile_id
+ *         required: true
+ *         description: ID of the profile making the request
+ *         schema:
+ *           type: integer
+ *           example: 1
+ *     responses:
+ *       200:
+ *         description: List of unpaid jobs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Job'
+ *       404:
+ *         description: No unpaid jobs found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "No unpaid jobs found"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal Server Error"
  */
+
 router.get('/unpaid', getProfile, async (req, res) => {
-  const id = Number(req.get('profile_id'))
+  const id = Number(req.get('profile_id'));
   try {
     const unpaidJobs = await Job.findAll({
       where: {
@@ -43,9 +89,75 @@ router.get('/unpaid', getProfile, async (req, res) => {
 });
 
 /**
- * @route POST /jobs/:job_id/pay
- * @desc Pay for a job
- * @access Private (Only for clients)
+ * @swagger
+ * /jobs/{job_id}/pay:
+ *   post:
+ *     summary: Pay for a specific job
+ *     tags: [Jobs]
+ *     parameters:
+ *       - in: path
+ *         name: job_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID of the job to pay for
+ *       - in: header
+ *         name: profile_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID of the profile making the payment (must be the client)
+ *     responses:
+ *       200:
+ *         description: Payment successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Payment successful"
+ *       400:
+ *         description: Job already paid or insufficient balance
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Insufficient balance to pay for this job"
+ *       403:
+ *         description: Forbidden - only the client can pay for the job
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Only the client can pay for the job"
+ *       404:
+ *         description: Job not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Job not found"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal Server Error"
  */
 router.post('/:job_id/pay', getProfile, async (req, res) => {
   const { job_id } = req.params;

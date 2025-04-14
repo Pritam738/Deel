@@ -1,7 +1,6 @@
 const request = require('supertest');
 const app = require('../app');
 const { sequelize, Profile, Contract, Job } = require('../model');
-const { getProfile } = require('../middleware/getProfile');
 
 jest.mock('../middleware/getProfile', () => ({
   getProfile: jest.fn((req, res, next) => {
@@ -157,7 +156,7 @@ describe('POST /jobs/:job_id/pay', () => {
 
   it('should return 404 if the job is not found', async () => {
     const response = await request(app)
-      .post(`/jobs/99999/pay`)  // Non-existent job ID
+      .post('/jobs/99999/pay')  // Non-existent job ID
       .set('profile_id', client.id)
       .send();
 

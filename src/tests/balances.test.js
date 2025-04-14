@@ -10,8 +10,7 @@ jest.mock('../middleware/getProfile', () => ({
   })
 }));
 
-let client, contractor, activeContract, unpaidJob;
-
+let client, contractor, activeContract;
 beforeEach(async () => {
   await sequelize.sync({ force: true });
 
@@ -38,7 +37,7 @@ beforeEach(async () => {
     terms: 'Test contract'
   });
 
-  unpaidJob = await Job.create({
+  await Job.create({
     ContractId: activeContract.id,
     description: 'Logo design',
     price: 400,
@@ -78,7 +77,7 @@ describe('POST /balances/deposit/:userId', () => {
 
   it('should return 404 for non-existing client', async () => {
     const res = await request(app)
-      .post(`/balances/deposit/9999`)
+      .post('/balances/deposit/9999')
       .set('profile_id', 9999)
       .send({ amount: 50 });
 
